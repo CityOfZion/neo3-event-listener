@@ -1,0 +1,32 @@
+{
+  "name": "@cityofzion/neon-event-listener",
+  "version": "1.0.0",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "ts-mocha src/**/*.spec.ts"
+  },
+  "dependencies": {
+    "@cityofzion/neon-core": "^5.2.0",
+    "@cityofzion/neon-js": "^5.2.0",
+    "randombytes": "^2.1.0",
+    "@cityofzion/neo3-event-listener": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^4.3.2",
+    "mocha": "^10.0.0",
+    "@types/mocha": "^10.0.0",
+    "ts-mocha": "^10.0.0",
+    "@types/expect": "^24.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CityOfZion/neo3-event-listener.git",
+    "directory": "packages/neon-event-listener"
+  }
+}
