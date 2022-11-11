@@ -13,7 +13,40 @@ exports.NeonEventListener = void 0;
 const Neon = require("@cityofzion/neon-core");
 class NeonEventListener {
     constructor(rpcUrl) {
+        this.blockPoolingLoopActive = false;
+        this.listeners = new Map();
         this.rpcClient = new Neon.rpc.RPCClient(rpcUrl);
+    }
+    addEventListener(contract, eventname, callback) {
+        const listenersOfContract = this.listeners.get(contract);
+        if (!listenersOfContract) {
+            this.listeners.set(contract, new Map([[eventname, [callback]]]));
+        }
+        else {
+            listenersOfContract.set(eventname, [...listenersOfContract.get(eventname), callback]);
+        }
+        if (!this.blockPoolingLoopActive) {
+            this.blockPoolingLoopActive = true;
+            this.blockPoolingLoop();
+        }
+    }
+    removeEventListener(contract, eventname, callback) {
+        const listenersOfContract = this.listeners.get(contract);
+        if (listenersOfContract) {
+            const listenersOfEvent = listenersOfContract.get(eventname);
+            if (listenersOfEvent) {
+                listenersOfContract.set(eventname, listenersOfEvent.filter(l => l !== callback));
+                if (listenersOfEvent.length === 0) {
+                    listenersOfContract.delete(eventname);
+                }
+            }
+            if (listenersOfContract.size === 0) {
+                this.listeners.delete(contract);
+            }
+        }
+        if (this.listeners.size === 0) {
+            this.blockPoolingLoopActive = false;
+        }
     }
     waitForApplicationLog(txId, options) {
         var _a, _b;
@@ -47,6 +80,44 @@ class NeonEventListener {
         return this.confirmHalt(txResult)
             && (!confirmStackTrue || this.confirmStackTrue(txResult))
             && (!eventToCheck || this.getNotificationState(txResult, eventToCheck) !== undefined);
+    }
+    blockPoolingLoop() {
+        return __awaiter(this, void 0, void 0, function* () {
+            let height = 0;
+            try {
+                while (this.blockPoolingLoopActive) {
+                    yield this.wait(4000);
+                    const oldHeight = height;
+                    height = yield this.rpcClient.getBlockCount();
+                    if (height <= oldHeight) {
+                        continue;
+                    }
+                    const block = yield this.rpcClient.getBlock(height - 1, true);
+                    for (const transaction of block.tx) {
+                        if (!transaction.hash) {
+                            continue;
+                        }
+                        const log = yield this.rpcClient.getApplicationLog(transaction.hash);
+                        for (const notification of log.executions[0].notifications) {
+                            const listenersOfContract = this.listeners.get(notification.contract);
+                            if (!listenersOfContract) {
+                                continue;
+                            }
+                            const listenersOfEvent = listenersOfContract.get(notification.eventname);
+                            if (!listenersOfEvent) {
+                                continue;
+                            }
+                            for (const listener of listenersOfEvent) {
+                                listener(notification);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (error) {
+                console.log({ error });
+            }
+        });
     }
     wait(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));

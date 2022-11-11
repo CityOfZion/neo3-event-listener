@@ -12,6 +12,10 @@ export interface Neo3EventWithState extends Neo3Event {
     state: Neo3StackItem;
 }
 /**
+ * The event listener callback
+ */
+export declare type Neo3EventListenerCallback = (event: Neo3EventWithState) => void;
+/**
  * An interface that defines the stack item format
  */
 export interface Neo3StackItem {
@@ -35,6 +39,20 @@ export interface Neo3ApplicationLog {
  * The entry point of the library
  */
 export interface Neo3EventListener {
+    /**
+     * Adds an event listener for the specified contract and event name
+     * @param contract
+     * @param eventname
+     * @param callback
+     */
+    addEventListener(contract: string, eventname: string, callback: Neo3EventListenerCallback): any;
+    /**
+     * Removes an event listener for the specified contract and event name
+     * @param contract
+     * @param eventname
+     * @param callback
+     */
+    removeEventListener(contract: string, eventname: string, callback: Neo3EventListenerCallback): any;
     /**
      * Waits for the transaction to be completed and returns the application log
      * @param txId id od the transaction
