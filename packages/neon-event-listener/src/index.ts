@@ -1,11 +1,12 @@
-import * as Neon from '@cityofzion/neon-core'
 import {
   Neo3ApplicationLog,
   Neo3Event,
   Neo3EventListener,
   Neo3EventListenerCallback,
   Neo3EventWithState,
+  Neo3StackItem,
 } from '@cityofzion/neo3-event-listener'
+import * as Neon from '@cityofzion/neon-core'
 
 export class NeonEventListener implements Neo3EventListener {
   static MAINNET = 'https://mainnet1.neo.coz.io:443'
@@ -25,7 +26,7 @@ export class NeonEventListener implements Neo3EventListener {
     if (!listenersOfContract) {
       this.listeners.set(contract, new Map([[eventname, [callback]]]))
     } else {
-      listenersOfContract.set(eventname, [...listenersOfContract.get(eventname)!, callback])
+      listenersOfContract.set(eventname, [...(listenersOfContract.get(eventname) ?? []), callback])
     }
     if (!this.blockPoolingLoopActive) {
       this.blockPoolingLoopActive = true
@@ -41,14 +42,34 @@ export class NeonEventListener implements Neo3EventListener {
         listenersOfContract.set(eventname, listenersOfEvent.filter(l => l !== callback))
         if (listenersOfEvent.length === 0) {
           listenersOfContract.delete(eventname)
+          if (listenersOfContract.size === 0) {
+            this.listeners.delete(contract)
+            if (this.listeners.size === 0) {
+              this.blockPoolingLoopActive = false
+            }
+          }
         }
       }
-      if (listenersOfContract.size === 0) {
-        this.listeners.delete(contract)
-      }
     }
+  }
+
+  removeAllEventListenersOfContract(contract: string) {
+    this.listeners.delete(contract)
     if (this.listeners.size === 0) {
       this.blockPoolingLoopActive = false
+    }
+  }
+
+  removeAllEventListenersOfEvent(contract: string, eventname: string) {
+    const listenersOfContract = this.listeners.get(contract)
+    if (listenersOfContract) {
+      listenersOfContract.delete(eventname)
+      if (listenersOfContract.size === 0) {
+        this.listeners.delete(contract)
+        if (this.listeners.size === 0) {
+          this.blockPoolingLoopActive = false
+        }
+      }
     }
   }
 
@@ -75,7 +96,11 @@ export class NeonEventListener implements Neo3EventListener {
   }
 
   confirmStackTrue(txResult: Neo3ApplicationLog): boolean {
-    return txResult?.executions[0]?.stack[0]?.value === true
+    if (!txResult || !txResult.executions || txResult.executions.length === 0 || !txResult.executions[0].stack || txResult.executions[0].stack.length === 0) {
+      return false
+    }
+    const stack: Neo3StackItem = txResult.executions[0].stack[0]
+    return stack.value === true
   }
 
   getNotificationState(txResult: Neo3ApplicationLog, eventToCheck: Neo3Event): Neo3EventWithState | undefined {
@@ -95,15 +120,13 @@ export class NeonEventListener implements Neo3EventListener {
   }
 
   private async blockPoolingLoop(): Promise<void> {
-    let height = 0
-    try {
-      while (this.blockPoolingLoopActive) {
-        await this.wait(4000)
+    let height = await this.rpcClient.getBlockCount()
 
-        const oldHeight = height
-        height = await this.rpcClient.getBlockCount()
+    while (this.blockPoolingLoopActive) {
+      await this.wait(4000)
 
-        if (height <= oldHeight) {
+      try {
+        if (height > await this.rpcClient.getBlockCount()) {
           continue
         }
 
@@ -128,13 +151,20 @@ export class NeonEventListener implements Neo3EventListener {
             }
 
             for (const listener of listenersOfEvent) {
-              listener(notification as Neo3EventWithState)
+              try {
+                listener(notification as Neo3EventWithState)
+              } catch (e) {
+                console.error(e)
+              }
             }
           }
         }
+
+      } catch (error) {
+        console.error(error)
       }
-    } catch (error) {
-      console.log({ error })
+
+      height++ // this is important to avoid skipping blocks when the code throws exceptions
     }
   }
 

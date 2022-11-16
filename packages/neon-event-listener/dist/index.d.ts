@@ -8,6 +8,8 @@ export declare class NeonEventListener implements Neo3EventListener {
     constructor(rpcUrl: string);
     addEventListener(contract: string, eventname: string, callback: Neo3EventListenerCallback): void;
     removeEventListener(contract: string, eventname: string, callback: Neo3EventListenerCallback): void;
+    removeAllEventListenersOfContract(contract: string): void;
+    removeAllEventListenersOfEvent(contract: string, eventname: string): void;
     waitForApplicationLog(txId: string, options?: {
         maxAttempts?: number | undefined;
         waitMs?: number | undefined;

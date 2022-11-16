@@ -18,12 +18,13 @@ class NeonEventListener {
         this.rpcClient = new Neon.rpc.RPCClient(rpcUrl);
     }
     addEventListener(contract, eventname, callback) {
+        var _a;
         const listenersOfContract = this.listeners.get(contract);
         if (!listenersOfContract) {
             this.listeners.set(contract, new Map([[eventname, [callback]]]));
         }
         else {
-            listenersOfContract.set(eventname, [...listenersOfContract.get(eventname), callback]);
+            listenersOfContract.set(eventname, [...((_a = listenersOfContract.get(eventname)) !== null && _a !== void 0 ? _a : []), callback]);
         }
         if (!this.blockPoolingLoopActive) {
             this.blockPoolingLoopActive = true;
@@ -38,14 +39,32 @@ class NeonEventListener {
                 listenersOfContract.set(eventname, listenersOfEvent.filter(l => l !== callback));
                 if (listenersOfEvent.length === 0) {
                     listenersOfContract.delete(eventname);
+                    if (listenersOfContract.size === 0) {
+                        this.listeners.delete(contract);
+                        if (this.listeners.size === 0) {
+                            this.blockPoolingLoopActive = false;
+                        }
+                    }
                 }
             }
-            if (listenersOfContract.size === 0) {
-                this.listeners.delete(contract);
-            }
         }
+    }
+    removeAllEventListenersOfContract(contract) {
+        this.listeners.delete(contract);
         if (this.listeners.size === 0) {
             this.blockPoolingLoopActive = false;
+        }
+    }
+    removeAllEventListenersOfEvent(contract, eventname) {
+        const listenersOfContract = this.listeners.get(contract);
+        if (listenersOfContract) {
+            listenersOfContract.delete(eventname);
+            if (listenersOfContract.size === 0) {
+                this.listeners.delete(contract);
+                if (this.listeners.size === 0) {
+                    this.blockPoolingLoopActive = false;
+                }
+            }
         }
     }
     waitForApplicationLog(txId, options) {
@@ -68,8 +87,11 @@ class NeonEventListener {
         return ((_a = txResult === null || txResult === void 0 ? void 0 : txResult.executions[0]) === null || _a === void 0 ? void 0 : _a.vmstate) === 'HALT';
     }
     confirmStackTrue(txResult) {
-        var _a, _b;
-        return ((_b = (_a = txResult === null || txResult === void 0 ? void 0 : txResult.executions[0]) === null || _a === void 0 ? void 0 : _a.stack[0]) === null || _b === void 0 ? void 0 : _b.value) === true;
+        if (!txResult || !txResult.executions || txResult.executions.length === 0 || !txResult.executions[0].stack || txResult.executions[0].stack.length === 0) {
+            return false;
+        }
+        const stack = txResult.executions[0].stack[0];
+        return stack.value === true;
     }
     getNotificationState(txResult, eventToCheck) {
         return txResult === null || txResult === void 0 ? void 0 : txResult.executions[0].notifications.find(e => {
@@ -83,13 +105,11 @@ class NeonEventListener {
     }
     blockPoolingLoop() {
         return __awaiter(this, void 0, void 0, function* () {
-            let height = 0;
-            try {
-                while (this.blockPoolingLoopActive) {
-                    yield this.wait(4000);
-                    const oldHeight = height;
-                    height = yield this.rpcClient.getBlockCount();
-                    if (height <= oldHeight) {
+            let height = yield this.rpcClient.getBlockCount();
+            while (this.blockPoolingLoopActive) {
+                yield this.wait(4000);
+                try {
+                    if (height > (yield this.rpcClient.getBlockCount())) {
                         continue;
                     }
                     const block = yield this.rpcClient.getBlock(height - 1, true);
@@ -108,14 +128,20 @@ class NeonEventListener {
                                 continue;
                             }
                             for (const listener of listenersOfEvent) {
-                                listener(notification);
+                                try {
+                                    listener(notification);
+                                }
+                                catch (e) {
+                                    console.error(e);
+                                }
                             }
                         }
                     }
                 }
-            }
-            catch (error) {
-                console.log({ error });
+                catch (error) {
+                    console.error(error);
+                }
+                height++; // this is important to avoid skipping blocks when the code throws exceptions
             }
         });
     }
