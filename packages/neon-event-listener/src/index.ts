@@ -8,6 +8,8 @@ import {
 } from '@cityofzion/neo3-event-listener'
 import * as Neon from '@cityofzion/neon-core'
 
+export type NeonEventListenerOptions = { debug: boolean }
+
 export class NeonEventListener implements Neo3EventListener {
   static MAINNET = 'https://mainnet1.neo.coz.io:443'
   static TESTNET = 'https://testnet1.neo.coz.io:443'
@@ -17,7 +19,7 @@ export class NeonEventListener implements Neo3EventListener {
 
   private readonly rpcClient: Neon.rpc.RPCClient
 
-  constructor(rpcUrl: string, private options: { debug: boolean }) {
+  constructor(rpcUrl: string, private options: NeonEventListenerOptions = { debug: false }) {
     this.rpcClient = new Neon.rpc.RPCClient(rpcUrl)
   }
 

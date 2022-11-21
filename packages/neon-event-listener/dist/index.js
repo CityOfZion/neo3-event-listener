@@ -12,7 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.NeonEventListener = void 0;
 const Neon = require("@cityofzion/neon-core");
 class NeonEventListener {
-    constructor(rpcUrl, options) {
+    constructor(rpcUrl, options = { debug: false }) {
         this.options = options;
         this.blockPollingLoopActive = false;
         this.listeners = new Map();
