@@ -68,9 +68,10 @@ export interface Neo3EventListener {
 
   /**
    * Checks if the transaction was completed successfully
+   * Throws an error if the transaction failed
    * @param txResult the Neo3ApplicationLog object
    * @param eventToCheck the Neo3Event object to check if it is present in the application log
    * @param confirmStackTrue if true, checks if the stack contains true as the first element
    */
-  confirmTransaction(txResult: Neo3ApplicationLog, eventToCheck?: Neo3Event | undefined, confirmStackTrue?: boolean | undefined): boolean
+  confirmTransaction(txResult: Neo3ApplicationLog, eventToCheck?: Neo3Event | undefined, confirmStackTrue?: boolean | undefined)
 }

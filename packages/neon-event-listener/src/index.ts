@@ -12,7 +12,7 @@ export class NeonEventListener implements Neo3EventListener {
   static MAINNET = 'https://mainnet1.neo.coz.io:443'
   static TESTNET = 'https://testnet1.neo.coz.io:443'
 
-  private blockPoolingLoopActive = false
+  private blockPollingLoopActive = false
   private listeners = new Map<string, Map<string, Neo3EventListenerCallback[]>>()
 
   private readonly rpcClient: Neon.rpc.RPCClient
@@ -28,9 +28,9 @@ export class NeonEventListener implements Neo3EventListener {
     } else {
       listenersOfContract.set(eventname, [...(listenersOfContract.get(eventname) ?? []), callback])
     }
-    if (!this.blockPoolingLoopActive) {
-      this.blockPoolingLoopActive = true
-      this.blockPoolingLoop()
+    if (!this.blockPollingLoopActive) {
+      this.blockPollingLoopActive = true
+      this.blockPollingLoop()
     }
   }
 
@@ -45,7 +45,7 @@ export class NeonEventListener implements Neo3EventListener {
           if (listenersOfContract.size === 0) {
             this.listeners.delete(contract)
             if (this.listeners.size === 0) {
-              this.blockPoolingLoopActive = false
+              this.blockPollingLoopActive = false
             }
           }
         }
@@ -56,7 +56,7 @@ export class NeonEventListener implements Neo3EventListener {
   removeAllEventListenersOfContract(contract: string) {
     this.listeners.delete(contract)
     if (this.listeners.size === 0) {
-      this.blockPoolingLoopActive = false
+      this.blockPollingLoopActive = false
     }
   }
 
@@ -67,7 +67,7 @@ export class NeonEventListener implements Neo3EventListener {
       if (listenersOfContract.size === 0) {
         this.listeners.delete(contract)
         if (this.listeners.size === 0) {
-          this.blockPoolingLoopActive = false
+          this.blockPollingLoopActive = false
         }
       }
     }
@@ -77,30 +77,36 @@ export class NeonEventListener implements Neo3EventListener {
     txId: string,
     options?: { maxAttempts?: number | undefined; waitMs?: number | undefined } | undefined
   ): Promise<Neo3ApplicationLog> {
-    const maxAttempts = options?.maxAttempts ?? 8
-    const waitMs = options?.waitMs ?? 2000
+    const maxAttempts = options?.maxAttempts ?? 20
+    const waitMs = options?.waitMs ?? 1000
 
-    let txResult: Neon.rpc.ApplicationLogJson | null = null
     let attempts = 0
+    let error = new Error("Couldn't get application log")
     do {
-      await this.wait(waitMs)
-      txResult = await this.rpcClient.getApplicationLog(txId)
+      try {
+        return await this.rpcClient.getApplicationLog(txId)
+      } catch (e) {
+        error = e
+      }
       attempts++
-    } while (!txResult && attempts < maxAttempts)
+      await this.wait(waitMs)
+    } while (attempts < maxAttempts)
 
-    return txResult
+    throw error
   }
 
-  confirmHalt(txResult: Neo3ApplicationLog): boolean {
-    return txResult?.executions[0]?.vmstate === 'HALT'
+  confirmHalt(txResult: Neo3ApplicationLog) {
+    if (txResult?.executions[0]?.vmstate !== 'HALT') throw new Error('Transaction failed. VMState: ' + txResult?.executions[0]?.vmstate)
   }
 
-  confirmStackTrue(txResult: Neo3ApplicationLog): boolean {
+  confirmStackTrue(txResult: Neo3ApplicationLog) {
     if (!txResult || !txResult.executions || txResult.executions.length === 0 || !txResult.executions[0].stack || txResult.executions[0].stack.length === 0) {
-      return false
+      throw new Error('Transaction failed. No stack found in transaction result')
     }
     const stack: Neo3StackItem = txResult.executions[0].stack[0]
-    return stack.value === true
+    if (stack.value !== true) {
+      throw new Error('Transaction failed. Stack value is not true')
+    }
   }
 
   getNotificationState(txResult: Neo3ApplicationLog, eventToCheck: Neo3Event): Neo3EventWithState | undefined {
@@ -113,16 +119,23 @@ export class NeonEventListener implements Neo3EventListener {
     txResult: Neo3ApplicationLog,
     eventToCheck?: Neo3Event | undefined,
     confirmStackTrue = false,
-  ): boolean {
-    return this.confirmHalt(txResult)
-      && (!confirmStackTrue || this.confirmStackTrue(txResult))
-      && (!eventToCheck || this.getNotificationState(txResult, eventToCheck) !== undefined)
+  ) {
+    this.confirmHalt(txResult)
+    if (confirmStackTrue) {
+      this.confirmStackTrue(txResult)
+    }
+    if (eventToCheck) {
+      const state = this.getNotificationState(txResult, eventToCheck)
+      if (!state) {
+        throw new Error('Transaction failed. Event not found in transaction result')
+      }
+    }
   }
 
-  private async blockPoolingLoop(): Promise<void> {
+  private async blockPollingLoop(): Promise<void> {
     let height = await this.rpcClient.getBlockCount()
 
-    while (this.blockPoolingLoopActive) {
+    while (this.blockPollingLoopActive) {
       await this.wait(4000)
 
       try {

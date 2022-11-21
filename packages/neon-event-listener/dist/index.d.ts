@@ -2,7 +2,7 @@ import { Neo3ApplicationLog, Neo3Event, Neo3EventListener, Neo3EventListenerCall
 export declare class NeonEventListener implements Neo3EventListener {
     static MAINNET: string;
     static TESTNET: string;
-    private blockPoolingLoopActive;
+    private blockPollingLoopActive;
     private listeners;
     private readonly rpcClient;
     constructor(rpcUrl: string);
@@ -14,10 +14,10 @@ export declare class NeonEventListener implements Neo3EventListener {
         maxAttempts?: number | undefined;
         waitMs?: number | undefined;
     } | undefined): Promise<Neo3ApplicationLog>;
-    confirmHalt(txResult: Neo3ApplicationLog): boolean;
-    confirmStackTrue(txResult: Neo3ApplicationLog): boolean;
+    confirmHalt(txResult: Neo3ApplicationLog): void;
+    confirmStackTrue(txResult: Neo3ApplicationLog): void;
     getNotificationState(txResult: Neo3ApplicationLog, eventToCheck: Neo3Event): Neo3EventWithState | undefined;
-    confirmTransaction(txResult: Neo3ApplicationLog, eventToCheck?: Neo3Event | undefined, confirmStackTrue?: boolean): boolean;
-    private blockPoolingLoop;
+    confirmTransaction(txResult: Neo3ApplicationLog, eventToCheck?: Neo3Event | undefined, confirmStackTrue?: boolean): void;
+    private blockPollingLoop;
     private wait;
 }

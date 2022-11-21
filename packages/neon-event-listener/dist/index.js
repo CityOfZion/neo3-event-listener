@@ -13,7 +13,7 @@ exports.NeonEventListener = void 0;
 const Neon = require("@cityofzion/neon-core");
 class NeonEventListener {
     constructor(rpcUrl) {
-        this.blockPoolingLoopActive = false;
+        this.blockPollingLoopActive = false;
         this.listeners = new Map();
         this.rpcClient = new Neon.rpc.RPCClient(rpcUrl);
     }
@@ -26,9 +26,9 @@ class NeonEventListener {
         else {
             listenersOfContract.set(eventname, [...((_a = listenersOfContract.get(eventname)) !== null && _a !== void 0 ? _a : []), callback]);
         }
-        if (!this.blockPoolingLoopActive) {
-            this.blockPoolingLoopActive = true;
-            this.blockPoolingLoop();
+        if (!this.blockPollingLoopActive) {
+            this.blockPollingLoopActive = true;
+            this.blockPollingLoop();
         }
     }
     removeEventListener(contract, eventname, callback) {
@@ -42,7 +42,7 @@ class NeonEventListener {
                     if (listenersOfContract.size === 0) {
                         this.listeners.delete(contract);
                         if (this.listeners.size === 0) {
-                            this.blockPoolingLoopActive = false;
+                            this.blockPollingLoopActive = false;
                         }
                     }
                 }
@@ -52,7 +52,7 @@ class NeonEventListener {
     removeAllEventListenersOfContract(contract) {
         this.listeners.delete(contract);
         if (this.listeners.size === 0) {
-            this.blockPoolingLoopActive = false;
+            this.blockPollingLoopActive = false;
         }
     }
     removeAllEventListenersOfEvent(contract, eventname) {
@@ -62,7 +62,7 @@ class NeonEventListener {
             if (listenersOfContract.size === 0) {
                 this.listeners.delete(contract);
                 if (this.listeners.size === 0) {
-                    this.blockPoolingLoopActive = false;
+                    this.blockPollingLoopActive = false;
                 }
             }
         }
@@ -70,28 +70,36 @@ class NeonEventListener {
     waitForApplicationLog(txId, options) {
         var _a, _b;
         return __awaiter(this, void 0, void 0, function* () {
-            const maxAttempts = (_a = options === null || options === void 0 ? void 0 : options.maxAttempts) !== null && _a !== void 0 ? _a : 8;
-            const waitMs = (_b = options === null || options === void 0 ? void 0 : options.waitMs) !== null && _b !== void 0 ? _b : 2000;
-            let txResult = null;
+            const maxAttempts = (_a = options === null || options === void 0 ? void 0 : options.maxAttempts) !== null && _a !== void 0 ? _a : 20;
+            const waitMs = (_b = options === null || options === void 0 ? void 0 : options.waitMs) !== null && _b !== void 0 ? _b : 1000;
             let attempts = 0;
+            let error = new Error("Couldn't get application log");
             do {
-                yield this.wait(waitMs);
-                txResult = yield this.rpcClient.getApplicationLog(txId);
+                try {
+                    return yield this.rpcClient.getApplicationLog(txId);
+                }
+                catch (e) {
+                    error = e;
+                }
                 attempts++;
-            } while (!txResult && attempts < maxAttempts);
-            return txResult;
+                yield this.wait(waitMs);
+            } while (attempts < maxAttempts);
+            throw error;
         });
     }
     confirmHalt(txResult) {
-        var _a;
-        return ((_a = txResult === null || txResult === void 0 ? void 0 : txResult.executions[0]) === null || _a === void 0 ? void 0 : _a.vmstate) === 'HALT';
+        var _a, _b;
+        if (((_a = txResult === null || txResult === void 0 ? void 0 : txResult.executions[0]) === null || _a === void 0 ? void 0 : _a.vmstate) !== 'HALT')
+            throw new Error('Transaction failed. VMState: ' + ((_b = txResult === null || txResult === void 0 ? void 0 : txResult.executions[0]) === null || _b === void 0 ? void 0 : _b.vmstate));
     }
     confirmStackTrue(txResult) {
         if (!txResult || !txResult.executions || txResult.executions.length === 0 || !txResult.executions[0].stack || txResult.executions[0].stack.length === 0) {
-            return false;
+            throw new Error('Transaction failed. No stack found in transaction result');
         }
         const stack = txResult.executions[0].stack[0];
-        return stack.value === true;
+        if (stack.value !== true) {
+            throw new Error('Transaction failed. Stack value is not true');
+        }
     }
     getNotificationState(txResult, eventToCheck) {
         return txResult === null || txResult === void 0 ? void 0 : txResult.executions[0].notifications.find(e => {
@@ -99,14 +107,21 @@ class NeonEventListener {
         });
     }
     confirmTransaction(txResult, eventToCheck, confirmStackTrue = false) {
-        return this.confirmHalt(txResult)
-            && (!confirmStackTrue || this.confirmStackTrue(txResult))
-            && (!eventToCheck || this.getNotificationState(txResult, eventToCheck) !== undefined);
+        this.confirmHalt(txResult);
+        if (confirmStackTrue) {
+            this.confirmStackTrue(txResult);
+        }
+        if (eventToCheck) {
+            const state = this.getNotificationState(txResult, eventToCheck);
+            if (!state) {
+                throw new Error('Transaction failed. Event not found in transaction result');
+            }
+        }
     }
-    blockPoolingLoop() {
+    blockPollingLoop() {
         return __awaiter(this, void 0, void 0, function* () {
             let height = yield this.rpcClient.getBlockCount();
-            while (this.blockPoolingLoopActive) {
+            while (this.blockPollingLoopActive) {
                 yield this.wait(4000);
                 try {
                     if (height > (yield this.rpcClient.getBlockCount())) {
