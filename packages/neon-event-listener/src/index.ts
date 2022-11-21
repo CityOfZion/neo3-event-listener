@@ -17,7 +17,7 @@ export class NeonEventListener implements Neo3EventListener {
 
   private readonly rpcClient: Neon.rpc.RPCClient
 
-  constructor(rpcUrl: string) {
+  constructor(rpcUrl: string, private options: { debug: boolean }) {
     this.rpcClient = new Neon.rpc.RPCClient(rpcUrl)
   }
 
@@ -139,7 +139,10 @@ export class NeonEventListener implements Neo3EventListener {
       await this.wait(4000)
 
       try {
+        this.options.debug && console.log('Checking block ' + height)
+
         if (height > await this.rpcClient.getBlockCount()) {
+          this.options.debug && console.log('Block height is ahead of node. Waiting for node to catch up...')
           continue
         }
 
@@ -147,6 +150,7 @@ export class NeonEventListener implements Neo3EventListener {
 
         for (const transaction of block.tx) {
           if (!transaction.hash) {
+            this.options.debug && console.log('Transaction hash not found. Skipping transaction')
             continue
           }
 
@@ -155,30 +159,35 @@ export class NeonEventListener implements Neo3EventListener {
           for (const notification of log.executions[0].notifications) {
             const listenersOfContract = this.listeners.get(notification.contract)
             if (!listenersOfContract) {
+              this.options.debug && console.log('No listeners for contract ' + notification.contract)
               continue
             }
 
             const listenersOfEvent = listenersOfContract.get(notification.eventname)
             if (!listenersOfEvent) {
+              this.options.debug && console.log('No listeners for event ' + notification.eventname)
               continue
             }
 
             for (const listener of listenersOfEvent) {
               try {
+                this.options.debug && console.log('Calling listener')
                 listener(notification as Neo3EventWithState)
               } catch (e) {
-                console.error(e)
+                this.options.debug && console.error(e)
               }
             }
           }
         }
 
-      } catch (error) {
-        console.error(error)
-      }
+        height++ // this is important to avoid skipping blocks when the code throws exceptions
 
-      height++ // this is important to avoid skipping blocks when the code throws exceptions
+      } catch (error) {
+        this.options.debug && console.error(error)
+      }
     }
+
+    this.options.debug && console.log('Block polling loop stopped')
   }
 
   private wait(ms: number) {

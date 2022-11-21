@@ -1,11 +1,14 @@
 import { Neo3ApplicationLog, Neo3Event, Neo3EventListener, Neo3EventListenerCallback, Neo3EventWithState } from '@cityofzion/neo3-event-listener';
 export declare class NeonEventListener implements Neo3EventListener {
+    private options;
     static MAINNET: string;
     static TESTNET: string;
     private blockPollingLoopActive;
     private listeners;
     private readonly rpcClient;
-    constructor(rpcUrl: string);
+    constructor(rpcUrl: string, options: {
+        debug: boolean;
+    });
     addEventListener(contract: string, eventname: string, callback: Neo3EventListenerCallback): void;
     removeEventListener(contract: string, eventname: string, callback: Neo3EventListenerCallback): void;
     removeAllEventListenersOfContract(contract: string): void;
