@@ -12,7 +12,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.NeonEventListener = void 0;
 const Neon = require("@cityofzion/neon-core");
 class NeonEventListener {
-    constructor(rpcUrl, options = { debug: false }) {
+    constructor(rpcUrl, options) {
         this.options = options;
         this.blockPollingLoopActive = false;
         this.listeners = new Map();
@@ -68,11 +68,11 @@ class NeonEventListener {
             }
         }
     }
-    waitForApplicationLog(txId, options) {
-        var _a, _b;
+    waitForApplicationLog(txId) {
+        var _a, _b, _c, _d, _e, _f;
         return __awaiter(this, void 0, void 0, function* () {
-            const maxAttempts = (_a = options === null || options === void 0 ? void 0 : options.maxAttempts) !== null && _a !== void 0 ? _a : 20;
-            const waitMs = (_b = options === null || options === void 0 ? void 0 : options.waitMs) !== null && _b !== void 0 ? _b : 1000;
+            const maxAttempts = (_c = (_b = (_a = this.options) === null || _a === void 0 ? void 0 : _a.waitForApplicationLog) === null || _b === void 0 ? void 0 : _b.maxAttempts) !== null && _c !== void 0 ? _c : 30;
+            const waitMs = (_f = (_e = (_d = this.options) === null || _d === void 0 ? void 0 : _d.waitForApplicationLog) === null || _e === void 0 ? void 0 : _e.waitMs) !== null && _f !== void 0 ? _f : 1000;
             let attempts = 0;
             let error = new Error("Couldn't get application log");
             do {
@@ -120,41 +120,42 @@ class NeonEventListener {
         }
     }
     blockPollingLoop() {
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
         return __awaiter(this, void 0, void 0, function* () {
             let height = yield this.rpcClient.getBlockCount();
             while (this.blockPollingLoopActive) {
                 yield this.wait(4000);
                 try {
-                    this.options.debug && console.log('Checking block ' + height);
+                    ((_a = this.options) === null || _a === void 0 ? void 0 : _a.debug) && console.log('Checking block ' + height);
                     if (height > (yield this.rpcClient.getBlockCount())) {
-                        this.options.debug && console.log('Block height is ahead of node. Waiting for node to catch up...');
+                        ((_b = this.options) === null || _b === void 0 ? void 0 : _b.debug) && console.log('Block height is ahead of node. Waiting for node to catch up...');
                         continue;
                     }
                     const block = yield this.rpcClient.getBlock(height - 1, true);
                     for (const transaction of block.tx) {
                         if (!transaction.hash) {
-                            this.options.debug && console.log('Transaction hash not found. Skipping transaction');
+                            ((_c = this.options) === null || _c === void 0 ? void 0 : _c.debug) && console.log('Transaction hash not found. Skipping transaction');
                             continue;
                         }
                         const log = yield this.rpcClient.getApplicationLog(transaction.hash);
                         for (const notification of log.executions[0].notifications) {
                             const listenersOfContract = this.listeners.get(notification.contract);
                             if (!listenersOfContract) {
-                                this.options.debug && console.log('No listeners for contract ' + notification.contract);
+                                ((_d = this.options) === null || _d === void 0 ? void 0 : _d.debug) && console.log('No listeners for contract ' + notification.contract);
                                 continue;
                             }
                             const listenersOfEvent = listenersOfContract.get(notification.eventname);
                             if (!listenersOfEvent) {
-                                this.options.debug && console.log('No listeners for event ' + notification.eventname);
+                                ((_e = this.options) === null || _e === void 0 ? void 0 : _e.debug) && console.log('No listeners for event ' + notification.eventname);
                                 continue;
                             }
                             for (const listener of listenersOfEvent) {
                                 try {
-                                    this.options.debug && console.log('Calling listener');
+                                    ((_f = this.options) === null || _f === void 0 ? void 0 : _f.debug) && console.log('Calling listener');
                                     listener(notification);
                                 }
                                 catch (e) {
-                                    this.options.debug && console.error(e);
+                                    ((_g = this.options) === null || _g === void 0 ? void 0 : _g.debug) && console.error(e);
                                 }
                             }
                         }
@@ -162,10 +163,10 @@ class NeonEventListener {
                     height++; // this is important to avoid skipping blocks when the code throws exceptions
                 }
                 catch (error) {
-                    this.options.debug && console.error(error);
+                    ((_h = this.options) === null || _h === void 0 ? void 0 : _h.debug) && console.error(error);
                 }
             }
-            this.options.debug && console.log('Block polling loop stopped');
+            ((_j = this.options) === null || _j === void 0 ? void 0 : _j.debug) && console.log('Block polling loop stopped');
         });
     }
     wait(ms) {
