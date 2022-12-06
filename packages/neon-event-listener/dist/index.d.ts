@@ -1,6 +1,10 @@
 import { Neo3ApplicationLog, Neo3Event, Neo3EventListener, Neo3EventListenerCallback, Neo3EventWithState } from '@cityofzion/neo3-event-listener';
 export declare type NeonEventListenerOptions = {
-    debug: boolean;
+    debug?: boolean | undefined;
+    waitForApplicationLog?: {
+        maxAttempts?: number | undefined;
+        waitMs?: number | undefined;
+    } | undefined;
 };
 export declare class NeonEventListener implements Neo3EventListener {
     private options;
@@ -9,15 +13,12 @@ export declare class NeonEventListener implements Neo3EventListener {
     private blockPollingLoopActive;
     private listeners;
     private readonly rpcClient;
-    constructor(rpcUrl: string, options?: NeonEventListenerOptions);
+    constructor(rpcUrl: string, options: NeonEventListenerOptions | undefined);
     addEventListener(contract: string, eventname: string, callback: Neo3EventListenerCallback): void;
     removeEventListener(contract: string, eventname: string, callback: Neo3EventListenerCallback): void;
     removeAllEventListenersOfContract(contract: string): void;
     removeAllEventListenersOfEvent(contract: string, eventname: string): void;
-    waitForApplicationLog(txId: string, options?: {
-        maxAttempts?: number | undefined;
-        waitMs?: number | undefined;
-    } | undefined): Promise<Neo3ApplicationLog>;
+    waitForApplicationLog(txId: string): Promise<Neo3ApplicationLog>;
     confirmHalt(txResult: Neo3ApplicationLog): void;
     confirmStackTrue(txResult: Neo3ApplicationLog): void;
     getNotificationState(txResult: Neo3ApplicationLog, eventToCheck: Neo3Event): Neo3EventWithState | undefined;
